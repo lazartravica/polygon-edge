@@ -91,18 +91,19 @@ func (c *checkpointManager) getLatestCheckpointBlock() (uint64, error) {
 		return 0, fmt.Errorf("failed to convert current checkpoint id '%s' to number: %w",
 			latestCheckpointBlockRaw, err)
 	}
-
+	c.logger.Info("getLatestCheckpointBlock", "latestCheckpointBlockNum", latestCheckpointBlockNum)
 	return latestCheckpointBlockNum, nil
 }
 
 // submitCheckpoint sends a transaction with checkpoint data to the rootchain
 func (c *checkpointManager) submitCheckpoint(latestHeader types.Header, isEndOfEpoch bool) error {
 	lastCheckpointBlockNumber, err := c.getLatestCheckpointBlock()
+	c.logger.Info("getLatestCheckpointBlock", "lastCheckpointBlockNumber", lastCheckpointBlockNumber, "err", err)
 	if err != nil {
 		return err
 	}
 
-	c.logger.Debug("submitCheckpoint invoked...",
+	c.logger.Info("submitCheckpoint invoked...",
 		"latest checkpoint block", lastCheckpointBlockNumber,
 		"checkpoint block", latestHeader.Number)
 
@@ -151,17 +152,22 @@ func (c *checkpointManager) submitCheckpoint(latestHeader types.Header, isEndOfE
 
 		parentEpochNumber := parentExtra.Checkpoint.EpochNumber
 		currentEpochNumber := currentExtra.Checkpoint.EpochNumber
-		parentHeader = currentHeader
-		parentExtra = currentExtra
 
+		fmt.Println("encodeAndSendCheckpoint", parentHeader.Number, "parentEpochNumber", parentEpochNumber, "currentEpochNumber", currentEpochNumber)
 		// send pending checkpoints only for epoch ending blocks
 		if blockNumber == 1 || parentEpochNumber == currentEpochNumber {
+			parentHeader = currentHeader
+			parentExtra = currentExtra
 			continue
 		}
 
+		fmt.Println("c.encodeAndSendCheckpoint", parentHeader.Number, parentExtra.Checkpoint.EpochNumber)
 		if err = c.encodeAndSendCheckpoint(nonce, txn, *parentHeader, *parentExtra, true); err != nil {
 			return err
 		}
+		parentHeader = currentHeader
+		parentExtra = currentExtra
+
 		nonce++
 	}
 
@@ -178,7 +184,7 @@ func (c *checkpointManager) submitCheckpoint(latestHeader types.Header, isEndOfE
 // sends a transaction to the CheckpointManager rootchain contract
 func (c *checkpointManager) encodeAndSendCheckpoint(nonce uint64, txn *ethgo.Transaction,
 	header types.Header, extra Extra, isEndOfEpoch bool) error {
-	c.logger.Debug("send checkpoint txn...", "block number", header.Number)
+	c.logger.Info("send checkpoint txn...", "block number", header.Number, "isEndOfEpoch", isEndOfEpoch)
 
 	nextEpochValidators := AccountSet{}
 
@@ -198,6 +204,7 @@ func (c *checkpointManager) encodeAndSendCheckpoint(nonce uint64, txn *ethgo.Tra
 
 	txn.Input = input
 
+	fmt.Println("send submit", "number", header.Number, "epoch", extra.Checkpoint.EpochNumber)
 	receipt, err := c.rootchain.SendTransaction(nonce, txn, c.signer)
 	if err != nil {
 		return err

@@ -3,6 +3,10 @@ package e2e
 import (
 	"context"
 	"fmt"
+	"github.com/0xPolygon/polygon-edge/command/genesis"
+	"github.com/0xPolygon/polygon-edge/command/rootchain/helper"
+	"github.com/0xPolygon/polygon-edge/consensus/polybft"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -182,4 +186,66 @@ func TestE2E_Bridge_MainWorkflow(t *testing.T) {
 		func(_ int, status ResultEventStatus) bool {
 			return status == ResultEventSuccess
 		})
+}
+
+func TestE2E_Bridge_L2toL1Exit(t *testing.T) {
+	os.Setenv("E2E_TESTS", "true")
+	key, err := ethgow.GenerateKey()
+	require.NoError(t, err)
+
+	scpath := "../core-contracts/artifacts/contracts/"
+	rootchainArtifact, err := polybft.ReadArtifact(scpath, "root/CheckpointManager.sol", "CheckpointManager")
+	if err != nil {
+		t.Fatal(err)
+	}
+	input, err := rootchainArtifact.Abi.GetMethod("currentEpoch").Encode([]interface{}{})
+	require.NoError(t, err)
+	inputBN, err := rootchainArtifact.Abi.GetMethod("currentCheckpointBlockNumber").Encode([]interface{}{})
+	require.NoError(t, err)
+	//t.Fatal()
+	tt := time.Now()
+	cluster := framework.NewTestCluster(t, 5,
+		framework.WithBridge(),
+		framework.WithPremine(types.Address(key.Address())),
+	)
+	defer cluster.Stop()
+
+	fmt.Println("cluster created", time.Since(tt))
+
+	// wait for a couple of blocks
+	require.NoError(t, cluster.WaitForBlock(2, 2*time.Minute))
+	fmt.Println("2 block", time.Since(tt))
+
+	validators, err := genesis.ReadValidatorsByRegexp(cluster.Config.TmpDir, cluster.Config.ValidatorPrefix)
+	require.NoError(t, err)
+	t.Log("fund validators")
+	for i := range validators {
+		_, err = helper.FundAccount(validators[i].Address)
+		t.Log("fund", validators[i].Address, err)
+		require.NoError(t, err)
+	}
+	rootchainClient, err := helper.GetJSONRPCClient()
+	require.NoError(t, err)
+	t.Log("balances")
+	for _, v := range validators {
+		b, err := rootchainClient.Eth().GetBalance(ethgo.Address(v.Address), ethgo.Latest)
+		require.NoError(t, err)
+		t.Log(v.Address, b.Uint64())
+	}
+
+	//c := contract.NewContract(ethgo.Address(helper.CheckpointManagerAddress), rootchainArtifact.Abi,
+	//	contract.WithJsonRPC(cluster.Servers[0].JSONRPC().Eth()))
+	//c.Call()
+
+	for {
+		t.Log(helper.Call(helper.GetRootchainAdminKey().Address(), ethgo.Address(helper.CheckpointManagerAddress), input))
+		t.Log(helper.Call(helper.GetRootchainAdminKey().Address(), ethgo.Address(helper.CheckpointManagerAddress), inputBN))
+		t.Log(cluster.Servers[0].JSONRPC().Eth().BlockNumber())
+		time.Sleep(time.Second)
+	}
+
+}
+
+func TestExit(t *testing.T) {
+
 }

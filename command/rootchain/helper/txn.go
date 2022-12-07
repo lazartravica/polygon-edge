@@ -51,7 +51,7 @@ func GetRootchainAdminKey() ethgo.Key {
 // SendTxn function sends transaction to the rootchain
 // blocks until receipt hash is returned
 func SendTxn(nonce uint64, txn *ethgo.Transaction, key ethgo.Key) (*ethgo.Receipt, error) {
-	provider, err := getJSONRPCClient()
+	provider, err := GetJSONRPCClient()
 	if err != nil {
 		return nil, err
 	}
@@ -90,7 +90,7 @@ func SendTxn(nonce uint64, txn *ethgo.Transaction, key ethgo.Key) (*ethgo.Receip
 
 // Call function is used to query a smart contract on given 'to' address
 func Call(from, to ethgo.Address, input []byte) (string, error) {
-	provider, err := getJSONRPCClient()
+	provider, err := GetJSONRPCClient()
 	if err != nil {
 		return "", err
 	}
@@ -107,7 +107,7 @@ func Call(from, to ethgo.Address, input []byte) (string, error) {
 }
 
 func ExistsCode(addr types.Address) (bool, error) {
-	provider, err := getJSONRPCClient()
+	provider, err := GetJSONRPCClient()
 	if err != nil {
 		return false, err
 	}
@@ -121,7 +121,7 @@ func ExistsCode(addr types.Address) (bool, error) {
 }
 
 func GetPendingNonce(addr types.Address) (uint64, error) {
-	provider, err := getJSONRPCClient()
+	provider, err := GetJSONRPCClient()
 	if err != nil {
 		return 0, err
 	}
@@ -135,7 +135,7 @@ func GetPendingNonce(addr types.Address) (uint64, error) {
 }
 
 func FundAccount(account types.Address) (types.Hash, error) {
-	provider, err := getJSONRPCClient()
+	provider, err := GetJSONRPCClient()
 	if err != nil {
 		return types.Hash{}, err
 	}
@@ -167,7 +167,7 @@ func FundAccount(account types.Address) (types.Hash, error) {
 	return types.BytesToHash(receipt.TransactionHash.Bytes()), nil
 }
 
-func getJSONRPCClient() (*jsonrpc.Client, error) {
+func GetJSONRPCClient() (*jsonrpc.Client, error) {
 	jrpcClientLock.Lock()
 	defer jrpcClientLock.Unlock()
 

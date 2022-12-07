@@ -155,6 +155,7 @@ func (f *fsm) BuildProposal(currentRound uint64) ([]byte, error) {
 		return nil, err
 	}
 
+	fmt.Println("BuildProposal", "blockNumber", parent.Number+1, "epochNumber", f.epochNumber)
 	extra.Checkpoint = &CheckpointData{
 		BlockRound:            currentRound,
 		EpochNumber:           f.epochNumber,

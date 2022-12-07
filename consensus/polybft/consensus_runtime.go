@@ -1097,12 +1097,14 @@ func (c *consensusRuntime) InsertBlock(proposal []byte, committedSeals []*messag
 		if fsm.isEndOfEpoch || c.checkpointManager.isCheckpointBlock(block.Header.Number) {
 			if bytes.Equal(c.config.Key.Address().Bytes(), block.Header.Miner) { // true if node is proposer
 				go func(header types.Header, epochNumber uint64) {
+					c.logger.Info("submit checkpoint", "header", header.Number, "eoe", fsm.isEndOfEpoch)
 					err := c.checkpointManager.submitCheckpoint(header, fsm.isEndOfEpoch)
 					if err != nil {
 						c.logger.Warn("failed to submit checkpoint",
-							"block", block.Header.Number,
+							"block", header.Number,
 							"epoch number", epochNumber,
-							"error", err)
+							"error", err,
+							"sender", c.checkpointManager.signer.Address())
 					}
 				}(*block.Header, fsm.epochNumber)
 			}

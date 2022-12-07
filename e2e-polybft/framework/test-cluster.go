@@ -174,7 +174,7 @@ func isTrueEnv(e string) bool {
 }
 
 func NewTestCluster(t *testing.T, validatorsCount int, opts ...ClusterOption) *TestCluster {
-	t.Helper()
+	//t.Helper()
 
 	if !isTrueEnv(envE2ETestsEnabled) {
 		t.Skip("Integration tests are disabled.")
@@ -185,11 +185,12 @@ func NewTestCluster(t *testing.T, validatorsCount int, opts ...ClusterOption) *T
 
 	config := &TestClusterConfig{
 		t:          t,
-		WithLogs:   isTrueEnv(envLogsEnabled),
+		WithLogs:   true, //isTrueEnv(envLogsEnabled),
 		WithStdout: isTrueEnv(envStdoutEnabled),
 		TmpDir:     tmpDir,
 		Binary:     resolveBinary(),
 	}
+	t.Log(tmpDir)
 
 	if config.ContractsDir == "" {
 		config.ContractsDir = defaultContractsPath
@@ -284,6 +285,7 @@ func NewTestCluster(t *testing.T, validatorsCount int, opts ...ClusterOption) *T
 	}
 
 	if cluster.Config.HasBridge {
+		fmt.Println("deploy bridge contract")
 		err := cluster.Bridge.deployRootchainContracts(genesisPath)
 		require.NoError(t, err)
 	}

@@ -1,6 +1,7 @@
 package e2e
 
 import (
+	"os"
 	"testing"
 	"time"
 
@@ -9,6 +10,8 @@ import (
 )
 
 func TestE2E_Consensus_Basic_WithNonValidators(t *testing.T) {
+	os.Setenv("E2E_TESTS", "true")
+
 	cluster := framework.NewTestCluster(t, 7,
 		framework.WithNonValidators(2), framework.WithValidatorSnapshot(5))
 	defer cluster.Stop()
