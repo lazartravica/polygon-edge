@@ -1110,7 +1110,7 @@ func (c *consensusRuntime) InsertBlock(proposal []byte, committedSeals []*messag
 							"block", header.Number,
 							"epoch number", epochNumber,
 							"error", err,
-							"sender", c.checkpointManager.signer.Address())
+							"sender", c.checkpointManager.key.Address())
 					}
 				}(*block.Header, fsm.epochNumber)
 			}

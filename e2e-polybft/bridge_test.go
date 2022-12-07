@@ -5,6 +5,7 @@ import (
 	"github.com/0xPolygon/polygon-edge/command/genesis"
 	"github.com/0xPolygon/polygon-edge/command/rootchain/helper"
 	"github.com/0xPolygon/polygon-edge/consensus/polybft"
+	"math/big"
 	"os"
 	"strings"
 	"testing"
@@ -200,13 +201,35 @@ func TestE2E_Bridge_L2toL1Exit(t *testing.T) {
 	validators, err := genesis.ReadValidatorsByRegexp(cluster.Config.TmpDir, cluster.Config.ValidatorPrefix)
 	require.NoError(t, err)
 	t.Log("fund validators")
-	for i := range validators {
-		_, err = helper.FundAccount(validators[i].Address)
-		t.Log("fund", validators[i].Address, err)
-		require.NoError(t, err)
-	}
-	rootchainClient, err := helper.GetJSONRPCClient()
+	rootchainAddr := "http://127.0.0.1:8545"
+	rootchainClient, err := jsonrpc.NewClient(rootchainAddr)
 	require.NoError(t, err)
+
+	txRelayer, err := txrelayer.NewTxRelayer(txrelayer.WithIPAddress(rootchainAddr))
+	require.NoError(t, err)
+
+	for i := range validators {
+		fundAddr := ethgo.Address(validators[i].Address)
+		txn := &ethgo.Transaction{
+			To:    &fundAddr,
+			Value: big.NewInt(1000000000000000000),
+		}
+
+		receipt, err := txRelayer.SendTransactionLocal(txn)
+		t.Log(receipt, err)
+		if receipt != nil && receipt.Status == uint64(types.ReceiptSuccess) {
+			t.Log("Funded", fundAddr)
+		}
+
+		//toAddr := ethgo.Address(validators[i].Address)
+		//_, err = Fund(t, rootchainClient, &ethgo.Transaction{
+		//	From:  helper.GetRootchainAdminKey().Address(),
+		//	To:    &toAddr,
+		//	Value: big.NewInt(100000000000000000),
+		//}, helper.GetRootchainAdminKey())
+		//t.Log("fund", validators[i].Address, err)
+		//require.NoError(t, err)
+	}
 	t.Log("balances")
 	for _, v := range validators {
 		b, err := rootchainClient.Eth().GetBalance(ethgo.Address(v.Address), ethgo.Latest)
@@ -217,16 +240,30 @@ func TestE2E_Bridge_L2toL1Exit(t *testing.T) {
 	//c := contract.NewContract(ethgo.Address(helper.CheckpointManagerAddress), rootchainArtifact.Abi,
 	//	contract.WithJsonRPC(cluster.Servers[0].JSONRPC().Eth()))
 	//c.Call()
-
+	checkpointManagerAddress := ethgo.Address(helper.CheckpointManagerAddress)
 	for {
-		t.Log(helper.Call(helper.GetRootchainAdminKey().Address(), ethgo.Address(helper.CheckpointManagerAddress), input))
-		t.Log(helper.Call(helper.GetRootchainAdminKey().Address(), ethgo.Address(helper.CheckpointManagerAddress), inputBN))
+
+		t.Log(rootchainClient.Eth().Call(&ethgo.CallMsg{
+			From:     helper.GetRootchainAdminKey().Address(),
+			To:       &checkpointManagerAddress,
+			Data:     input,
+			GasPrice: defaultGasPrice,
+			Gas:      big.NewInt(defaultGasLimit),
+		}, ethgo.Pending))
+		t.Log(rootchainClient.Eth().Call(&ethgo.CallMsg{
+			From:     helper.GetRootchainAdminKey().Address(),
+			To:       &checkpointManagerAddress,
+			Data:     inputBN,
+			GasPrice: defaultGasPrice,
+			Gas:      big.NewInt(defaultGasLimit),
+		}, ethgo.Pending))
 		t.Log(cluster.Servers[0].JSONRPC().Eth().BlockNumber())
 		time.Sleep(time.Second)
 	}
 
 }
 
-func TestExit(t *testing.T) {
-
-}
+const (
+	defaultGasPrice = 1879048192 // 0x70000000
+	defaultGasLimit = 5242880    // 0x500000
+)
