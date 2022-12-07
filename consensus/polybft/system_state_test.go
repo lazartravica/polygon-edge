@@ -68,7 +68,7 @@ func TestSystemState_GetValidatorSet(t *testing.T) {
 		transition: transition,
 	}
 
-	st := NewSystemState(&PolyBFTConfig{ValidatorSetAddr: result.Address}, provider)
+	st := NewSystemState(result.Address, types.ZeroAddress, provider)
 	validators, err := st.GetValidatorSet()
 	assert.NoError(t, err)
 	assert.Equal(t, types.Address(ethgo.HexToAddress("1")), validators[0].Address)
@@ -113,7 +113,7 @@ func TestSystemState_GetNextExecutionAndCommittedIndex(t *testing.T) {
 		transition: transition,
 	}
 
-	systemState := NewSystemState(&PolyBFTConfig{StateReceiverAddr: result.Address}, provider)
+	systemState := NewSystemState(types.ZeroAddress, result.Address, provider)
 	nextExecutionIndex, err := systemState.GetNextExecutionIndex()
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(1), nextExecutionIndex)
@@ -174,7 +174,7 @@ func TestSystemState_GetEpoch(t *testing.T) {
 		transition: transition,
 	}
 
-	systemState := NewSystemState(&PolyBFTConfig{ValidatorSetAddr: result.Address}, provider)
+	systemState := NewSystemState(result.Address, types.ZeroAddress, provider)
 
 	expectedEpoch := uint64(50)
 	input, err := setEpochMethod.Encode([1]interface{}{expectedEpoch})

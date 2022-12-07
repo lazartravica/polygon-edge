@@ -411,7 +411,7 @@ func TestConsensusRuntime_OnBlockInserted_EndOfEpoch(t *testing.T) {
 
 	blockchainMock := new(blockchainMock)
 	blockchainMock.On("GetStateProviderForBlock", mock.Anything).Return(new(stateProviderMock)).Once()
-	blockchainMock.On("GetSystemState", mock.Anything, mock.Anything).Return(systemStateMock)
+	blockchainMock.On("GetSystemState", mock.Anything, mock.Anything, mock.Anything).Return(systemStateMock)
 
 	polybftBackendMock := new(polybftBackendMock)
 	polybftBackendMock.On("GetValidators", mock.Anything, mock.Anything).Return(validatorSet).Once()
@@ -580,7 +580,7 @@ func TestConsensusRuntime_FSM_EndOfEpoch_BuildRegisterCommitment_And_Uptime(t *t
 	blockchainMock := new(blockchainMock)
 	blockchainMock.On("NewBlockBuilder", mock.Anything).Return(&BlockBuilder{}, nil).Once()
 	blockchainMock.On("GetStateProviderForBlock", mock.Anything).Return(new(stateProviderMock)).Once()
-	blockchainMock.On("GetSystemState", mock.Anything, mock.Anything).Return(systemStateMock)
+	blockchainMock.On("GetSystemState", mock.Anything, mock.Anything, mock.Anything).Return(systemStateMock)
 	blockchainMock.On("GetHeaderByNumber", mock.Anything).Return(headerMap.getHeader)
 
 	state := newTestState(t)
@@ -672,7 +672,7 @@ func TestConsensusRuntime_FSM_EndOfEpoch_RegisterCommitmentNotFound(t *testing.T
 	blockchainMock := new(blockchainMock)
 	blockchainMock.On("NewBlockBuilder", mock.Anything).Return(new(blockBuilderMock), nil).Once()
 	blockchainMock.On("GetStateProviderForBlock", mock.Anything).Return(new(stateProviderMock)).Once()
-	blockchainMock.On("GetSystemState", mock.Anything, mock.Anything).Return(systemStateMock)
+	blockchainMock.On("GetSystemState", mock.Anything, mock.Anything, mock.Anything).Return(systemStateMock)
 	blockchainMock.On("GetHeaderByNumber", mock.Anything).Return(headerMap.getHeader)
 
 	metadata := &epochMetadata{
@@ -730,7 +730,7 @@ func TestConsensusRuntime_FSM_EndOfEpoch_BuildRegisterCommitment_QuorumNotReache
 	blockchainMock := new(blockchainMock)
 	blockchainMock.On("NewBlockBuilder", mock.Anything).Return(&BlockBuilder{}, nil).Once()
 	blockchainMock.On("GetStateProviderForBlock", mock.Anything).Return(new(stateProviderMock)).Once()
-	blockchainMock.On("GetSystemState", mock.Anything, mock.Anything).Return(systemStateMock)
+	blockchainMock.On("GetSystemState", mock.Anything, mock.Anything, mock.Anything).Return(systemStateMock)
 	blockchainMock.On("GetHeaderByNumber", mock.Anything).Return(headerMap.getHeader)
 
 	state := newTestState(t)
@@ -807,10 +807,9 @@ func Test_NewConsensusRuntime(t *testing.T) {
 			CheckpointAddr:  types.Address{0x10},
 			JSONRPCEndpoint: "testEndpoint",
 		},
-		ValidatorSetAddr: types.Address{0x11},
-		EpochSize:        10,
-		SprintSize:       10,
-		BlockTime:        2 * time.Second,
+		EpochSize:  10,
+		SprintSize: 10,
+		BlockTime:  2 * time.Second,
 	}
 
 	key := createTestKey(t)
@@ -829,7 +828,6 @@ func Test_NewConsensusRuntime(t *testing.T) {
 	assert.Equal(t, runtime.config.DataDir, tmpDir)
 	assert.Equal(t, uint64(10), runtime.config.PolyBFTConfig.SprintSize)
 	assert.Equal(t, uint64(10), runtime.config.PolyBFTConfig.EpochSize)
-	assert.Equal(t, "0x1100000000000000000000000000000000000000", runtime.config.PolyBFTConfig.ValidatorSetAddr.String())
 	assert.Equal(t, "0x1300000000000000000000000000000000000000", runtime.config.PolyBFTConfig.Bridge.BridgeAddr.String())
 	assert.Equal(t, "0x1000000000000000000000000000000000000000", runtime.config.PolyBFTConfig.Bridge.CheckpointAddr.String())
 	assert.Equal(t, uint64(10), runtime.config.PolyBFTConfig.EpochSize)
@@ -883,7 +881,7 @@ func TestConsensusRuntime_FSM_EndOfSprint_HasBundlesToExecute(t *testing.T) {
 	blockchainMock := new(blockchainMock)
 	blockchainMock.On("NewBlockBuilder").Return(&BlockBuilder{}, nil).Once()
 	blockchainMock.On("GetStateProviderForBlock", mock.Anything).Return(new(stateProviderMock)).Once()
-	blockchainMock.On("GetSystemState", mock.Anything, mock.Anything).Return(systemStateMock).Once()
+	blockchainMock.On("GetSystemState", mock.Anything, mock.Anything, mock.Anything).Return(systemStateMock).Once()
 
 	for i := 0; i < int(lastBlock.Number); i++ {
 		blockchainMock.On("GetHeaderByNumber", uint64(i)).Return(&types.Header{
@@ -1093,7 +1091,7 @@ func TestConsensusRuntime_restartEpoch_SameEpochNumberAsTheLastOne(t *testing.T)
 
 	blockchainMock := new(blockchainMock)
 	blockchainMock.On("GetStateProviderForBlock", mock.Anything).Return(new(stateProviderMock)).Once()
-	blockchainMock.On("GetSystemState", mock.Anything, mock.Anything).Return(systemStateMock).Once()
+	blockchainMock.On("GetSystemState", mock.Anything, mock.Anything, mock.Anything).Return(systemStateMock).Once()
 
 	runtime := &consensusRuntime{
 		activeValidatorFlag: 1,
@@ -1137,7 +1135,7 @@ func TestConsensusRuntime_restartEpoch_FirstRestart_NoStateSyncEvents(t *testing
 	validators := newTestValidators(3)
 	blockchainMock := new(blockchainMock)
 	blockchainMock.On("GetStateProviderForBlock", mock.Anything).Return(new(stateProviderMock)).Once()
-	blockchainMock.On("GetSystemState", mock.Anything, mock.Anything).Return(systemStateMock).Once()
+	blockchainMock.On("GetSystemState", mock.Anything, mock.Anything, mock.Anything).Return(systemStateMock).Once()
 
 	polybftBackendMock := new(polybftBackendMock)
 	polybftBackendMock.On("GetValidators", mock.Anything, mock.Anything).Return(validators.getPublicIdentities()).Once()
@@ -1191,7 +1189,7 @@ func TestConsensusRuntime_restartEpoch_FirstRestart_BuildsCommitment(t *testing.
 
 	blockchainMock := new(blockchainMock)
 	blockchainMock.On("GetStateProviderForBlock", mock.Anything).Return(new(stateProviderMock)).Once()
-	blockchainMock.On("GetSystemState", mock.Anything, mock.Anything).Return(systemStateMock).Once()
+	blockchainMock.On("GetSystemState", mock.Anything, mock.Anything, mock.Anything).Return(systemStateMock).Once()
 
 	polybftBackendMock := new(polybftBackendMock)
 	polybftBackendMock.On("GetValidators", mock.Anything, mock.Anything).Return(validators).Once()
@@ -1304,7 +1302,7 @@ func TestConsensusRuntime_restartEpoch_NewEpochToRun_BuildCommitment(t *testing.
 
 	blockchainMock := new(blockchainMock)
 	blockchainMock.On("GetStateProviderForBlock", mock.Anything).Return(new(stateProviderMock)).Once()
-	blockchainMock.On("GetSystemState", mock.Anything, mock.Anything).Return(systemStateMock).Once()
+	blockchainMock.On("GetSystemState", mock.Anything, mock.Anything, mock.Anything).Return(systemStateMock).Once()
 
 	polybftBackendMock := new(polybftBackendMock)
 	polybftBackendMock.On("GetValidators", mock.Anything, mock.Anything).Return(newValidatorSet).Once()
@@ -1397,8 +1395,7 @@ func TestConsensusRuntime_calculateUptime_EpochSizeToSmall(t *testing.T) {
 	t.Parallel()
 
 	config := &PolyBFTConfig{
-		ValidatorSetAddr: contracts.ValidatorSetContract,
-		EpochSize:        2,
+		EpochSize: 2,
 	}
 
 	consensusRuntime := &consensusRuntime{
@@ -1421,9 +1418,8 @@ func TestConsensusRuntime_calculateUptime_SecondEpoch(t *testing.T) {
 
 	validators := newTestValidatorsWithAliases([]string{"A", "B", "C", "D", "E"})
 	config := &PolyBFTConfig{
-		ValidatorSetAddr: contracts.ValidatorSetContract,
-		EpochSize:        10,
-		SprintSize:       5,
+		EpochSize:  10,
+		SprintSize: 5,
 	}
 	lastBuiltBlock, headerMap := createTestBlocksForUptime(t, 19, validators.getPublicIdentities())
 
@@ -1565,7 +1561,7 @@ func TestConsensusRuntime_FSM_EndOfEpoch_OnBlockInserted(t *testing.T) {
 	blockchainMock := new(blockchainMock)
 	blockchainMock.On("NewBlockBuilder", mock.Anything).Return(&BlockBuilder{}, nil).Once()
 	blockchainMock.On("GetStateProviderForBlock", mock.Anything).Return(new(stateProviderMock))
-	blockchainMock.On("GetSystemState", mock.Anything, mock.Anything).Return(systemStateMock)
+	blockchainMock.On("GetSystemState", mock.Anything, mock.Anything, mock.Anything).Return(systemStateMock)
 	blockchainMock.On("GetHeaderByNumber", mock.Anything).Return(headerMap.getHeader)
 
 	txPool := new(txPoolMock)
@@ -1641,7 +1637,7 @@ func TestConsensusRuntime_FSM_EndOfEpoch_OnBlockInserted(t *testing.T) {
 	inputData, err := fsm.proposerCommitmentToRegister.EncodeAbi()
 	assert.NoError(t, err)
 
-	tx := createStateTransactionWithData(fsm.config.StateReceiverAddr, inputData)
+	tx := createStateTransactionWithData(contracts.StateReceiverContract, inputData)
 
 	block := consensus.BuildBlock(consensus.BuildBlockParams{
 		Header: &types.Header{Number: 1},
