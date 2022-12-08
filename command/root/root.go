@@ -15,6 +15,7 @@ import (
 	"github.com/0xPolygon/polygon-edge/command/loadbot"
 	"github.com/0xPolygon/polygon-edge/command/monitor"
 	"github.com/0xPolygon/polygon-edge/command/peers"
+	"github.com/0xPolygon/polygon-edge/command/polybftmanifest"
 	"github.com/0xPolygon/polygon-edge/command/polybftsecrets"
 	"github.com/0xPolygon/polygon-edge/command/rootchain"
 	"github.com/0xPolygon/polygon-edge/command/secrets"
@@ -60,6 +61,7 @@ func (rc *RootCommand) registerSubCommands() {
 		whitelist.GetCommand(),
 		license.GetCommand(),
 		polybftsecrets.GetCommand(),
+		polybftmanifest.GetCommand(),
 		e2e.GetCommand(),
 	)
 }
