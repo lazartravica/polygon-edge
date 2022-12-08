@@ -5,6 +5,7 @@ import (
 	"github.com/0xPolygon/polygon-edge/command/genesis"
 	"github.com/0xPolygon/polygon-edge/command/rootchain/helper"
 	"github.com/0xPolygon/polygon-edge/consensus/polybft"
+	"github.com/davecgh/go-spew/spew"
 	"math/big"
 	"os"
 	"strings"
@@ -180,9 +181,14 @@ func TestE2E_Bridge_L2toL1Exit(t *testing.T) {
 
 	scpath := "../core-contracts/artifacts/contracts/"
 	rootchainArtifact, err := polybft.ReadArtifact(scpath, "root/CheckpointManager.sol", "CheckpointManager")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
+	exitHelperArtifact, err := polybft.ReadArtifact(scpath, "root/ExitHelper.sol", "ExitHelper")
+	require.NoError(t, err)
+	L1Artifact, err := polybft.ReadArtifact(scpath, "root/L1.sol", "L1")
+	require.NoError(t, err)
+	L2StateSenderArtifact, err := polybft.ReadArtifact(scpath, "child/L2StateSender.sol", "L2StateSender")
+	require.NoError(t, err)
+
 	input, err := rootchainArtifact.Abi.GetMethod("currentEpoch").Encode([]interface{}{})
 	require.NoError(t, err)
 	inputBN, err := rootchainArtifact.Abi.GetMethod("currentCheckpointBlockNumber").Encode([]interface{}{})
@@ -210,6 +216,7 @@ func TestE2E_Bridge_L2toL1Exit(t *testing.T) {
 	require.NoError(t, err)
 
 	txRelayer, err := txrelayer.NewTxRelayer(txrelayer.WithIPAddress(rootchainAddr))
+	l2Relayer, err := txrelayer.NewTxRelayer(txrelayer.WithIPAddress(cluster.Servers[0].JSONRPCAddr()))
 	require.NoError(t, err)
 
 	for i := range validators {
@@ -231,6 +238,43 @@ func TestE2E_Bridge_L2toL1Exit(t *testing.T) {
 		require.NoError(t, err)
 		t.Log(v.Address, b.Uint64())
 	}
+
+	receipt, err := txRelayer.SendTransaction(&ethgo.Transaction{
+		To:    nil, // contract deployment
+		Input: L1Artifact.Bytecode,
+	}, helper.GetRootchainAdminKey())
+	require.NoError(t, err)
+	l1ContractAddress := receipt.ContractAddress
+	t.Log("l1 deploy", l1ContractAddress, receipt.Status)
+
+	_ = exitHelperArtifact
+
+	//deploy L2StateSender
+
+	tx := &ethgo.Transaction{
+		From:  ethgo.Address(validators[0].Address),
+		Input: L2StateSenderArtifact.Bytecode,
+	}
+	receipt, err = l2Relayer.SendTransaction(tx, key)
+	require.NoError(t, err)
+	l2StateSenderAddress := receipt.ContractAddress
+	t.Log(l2StateSenderAddress, receipt.Status)
+
+	receipt, err = txRelayer.SendTransaction(&ethgo.Transaction{
+		To:    nil, // contract deployment
+		Input: exitHelperArtifact.Bytecode,
+	}, helper.GetRootchainAdminKey())
+	require.NoError(t, err)
+	exitHelperContractAddress := ethgo.Address(receipt.ContractAddress)
+	t.Log("exitHelperContractAddress deploy", exitHelperContractAddress, receipt.Status)
+
+	exitHelperInit, err := exitHelperArtifact.Abi.GetMethod("initialize").Encode([]interface{}{helper.CheckpointManagerAddress})
+	require.NoError(t, err)
+	receipt, err = txRelayer.SendTransaction(&ethgo.Transaction{
+		To:    &exitHelperContractAddress, // contract deployment
+		Input: exitHelperInit,
+	}, helper.GetRootchainAdminKey())
+	require.NoError(t, err)
 
 	sw := sync.Once{}
 	checkpointManagerAddress := ethgo.Address(helper.CheckpointManagerAddress)
@@ -274,7 +318,7 @@ func TestE2E_Bridge_L2toL1Exit(t *testing.T) {
 
 				extra, err := polybft.GetIbftExtra(block.ExtraData)
 				require.NoError(t, err)
-				polybft.checkp
+				spew.Dump(extra)
 
 			})
 		}
