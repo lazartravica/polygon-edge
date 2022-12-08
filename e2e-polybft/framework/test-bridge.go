@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
 	"testing"
 
@@ -67,7 +68,8 @@ func (t *TestBridge) deployRootchainContracts(genesisPath string) error {
 		"--genesis-path", genesisPath,
 	}
 
-	err := runCommand(t.clusterConfig.Binary, args, t.clusterConfig.GetStdout("bridge"))
+	err := runCommand(t.clusterConfig.Binary, args, os.Stdout)
+	//err := runCommand(t.clusterConfig.Binary, args, t.clusterConfig.GetStdout("bridge"))
 	if err != nil {
 		return fmt.Errorf("failed to deploy rootchain contracts: %w", err)
 	}

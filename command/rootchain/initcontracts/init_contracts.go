@@ -11,6 +11,7 @@ import (
 	"path"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -223,7 +224,7 @@ func deployContracts(outputter command.OutputFormatter) error {
 				contract.name, contract.expected, receipt.ContractAddress)
 		}
 
-		outputter.WriteCommandResult(newDeployContractsResult(contract.name, contract.expected, receipt.TransactionHash))
+		outputter.WriteCommandResult(newDeployContractsResult(contract.name+strconv.Itoa(int(receipt.Status)), contract.expected, receipt.TransactionHash))
 	}
 
 	if err := initializeCheckpointManager(txRelayer); err != nil {

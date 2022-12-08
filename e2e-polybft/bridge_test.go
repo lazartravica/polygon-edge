@@ -8,6 +8,7 @@ import (
 	"math/big"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -203,6 +204,7 @@ func TestE2E_Bridge_L2toL1Exit(t *testing.T) {
 	validators, err := genesis.ReadValidatorsByRegexp(cluster.Config.TmpDir, cluster.Config.ValidatorPrefix)
 	require.NoError(t, err)
 	t.Log("fund validators")
+
 	rootchainAddr := "http://127.0.0.1:8545"
 	rootchainClient, err := jsonrpc.NewClient(rootchainAddr)
 	require.NoError(t, err)
@@ -230,9 +232,9 @@ func TestE2E_Bridge_L2toL1Exit(t *testing.T) {
 		t.Log(v.Address, b.Uint64())
 	}
 
+	sw := sync.Once{}
 	checkpointManagerAddress := ethgo.Address(helper.CheckpointManagerAddress)
 	for {
-
 		t.Log(rootchainClient.Eth().Call(&ethgo.CallMsg{
 			From:     helper.GetRootchainAdminKey().Address(),
 			To:       &checkpointManagerAddress,
@@ -248,6 +250,35 @@ func TestE2E_Bridge_L2toL1Exit(t *testing.T) {
 			Gas:      big.NewInt(defaultGasLimit),
 		}, ethgo.Pending))
 		t.Log(cluster.Servers[0].JSONRPC().Eth().BlockNumber())
+
+		getLatestCheckpointBlockInput, err := rootchainArtifact.Abi.GetMethod("currentCheckpointBlockNumber").Encode([]interface{}{})
+		require.NoError(t, err)
+		v, err := txRelayer.Call(ethgo.Address(helper.GetRootchainAdminAddr()), ethgo.Address(helper.CheckpointManagerAddress), getLatestCheckpointBlockInput)
+		t.Log("getLatestCheckpoint", v, err)
+
+		if bn, _ := cluster.Servers[0].JSONRPC().Eth().BlockNumber(); bn > 30 {
+			sw.Do(func() {
+				t.Log("submit checkpoint")
+				cmAddr := ethgo.Address(helper.CheckpointManagerAddress)
+				t.Log(rootchainClient.Eth().GetCode(ethgo.Address(helper.CheckpointManagerAddress), ethgo.Latest))
+				t.Log(rootchainClient.Eth().GetCode(ethgo.Address(helper.BLSAddress), ethgo.Latest))
+				t.Log(rootchainClient.Eth().GetCode(ethgo.Address(helper.BN256G2Address), ethgo.Latest))
+				t.Log(rootchainClient.Eth().Call(&ethgo.CallMsg{
+					From: ethgo.Address(helper.GetRootchainAdminAddr()),
+					To:   &cmAddr,
+					Data: getLatestCheckpointBlockInput,
+				}, ethgo.Latest))
+
+				block, err := cluster.Servers[0].JSONRPC().Eth().GetBlockByNumber(10, true)
+				require.NoError(t, err)
+
+				extra, err := polybft.GetIbftExtra(block.ExtraData)
+				require.NoError(t, err)
+				polybft.checkp
+
+			})
+		}
+
 		time.Sleep(time.Second)
 	}
 
