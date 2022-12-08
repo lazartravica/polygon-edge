@@ -172,6 +172,8 @@ func TestE2E_Bridge_MainWorkflow(t *testing.T) {
 
 func TestE2E_Bridge_L2toL1Exit(t *testing.T) {
 	os.Setenv("E2E_TESTS", "true")
+	os.Setenv("EDGE_BINARY", "/Users/boris/GolandProjects/polygon-edge/artifacts/polygon-edge")
+
 	key, err := ethgow.GenerateKey()
 	require.NoError(t, err)
 
@@ -184,7 +186,7 @@ func TestE2E_Bridge_L2toL1Exit(t *testing.T) {
 	require.NoError(t, err)
 	inputBN, err := rootchainArtifact.Abi.GetMethod("currentCheckpointBlockNumber").Encode([]interface{}{})
 	require.NoError(t, err)
-	//t.Fatal()
+
 	tt := time.Now()
 	cluster := framework.NewTestCluster(t, 5,
 		framework.WithBridge(),
@@ -220,15 +222,6 @@ func TestE2E_Bridge_L2toL1Exit(t *testing.T) {
 		if receipt != nil && receipt.Status == uint64(types.ReceiptSuccess) {
 			t.Log("Funded", fundAddr)
 		}
-
-		//toAddr := ethgo.Address(validators[i].Address)
-		//_, err = Fund(t, rootchainClient, &ethgo.Transaction{
-		//	From:  helper.GetRootchainAdminKey().Address(),
-		//	To:    &toAddr,
-		//	Value: big.NewInt(100000000000000000),
-		//}, helper.GetRootchainAdminKey())
-		//t.Log("fund", validators[i].Address, err)
-		//require.NoError(t, err)
 	}
 	t.Log("balances")
 	for _, v := range validators {
@@ -237,9 +230,6 @@ func TestE2E_Bridge_L2toL1Exit(t *testing.T) {
 		t.Log(v.Address, b.Uint64())
 	}
 
-	//c := contract.NewContract(ethgo.Address(helper.CheckpointManagerAddress), rootchainArtifact.Abi,
-	//	contract.WithJsonRPC(cluster.Servers[0].JSONRPC().Eth()))
-	//c.Call()
 	checkpointManagerAddress := ethgo.Address(helper.CheckpointManagerAddress)
 	for {
 
