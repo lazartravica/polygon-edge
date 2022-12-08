@@ -586,9 +586,7 @@ func (c *consensusRuntime) buildBundles(commitment *Commitment, commitmentMsg *C
 
 	var bundleProofs []*BundleProof
 
-	startBundleIdx := commitmentMsg.GetBundleIdxFromStateSyncEventIdx(stateSyncExecutionIndex)
-
-	for idx := startBundleIdx; idx < commitmentMsg.BundlesCount(); idx++ {
+	for idx := uint64(0); idx < commitmentMsg.BundlesCount(); idx++ {
 		p := commitment.MerkleTree.GenerateProof(idx, 0)
 		events, err := c.getStateSyncEventsForBundle(commitmentMsg.GetFirstStateSyncIndexFromBundleIndex(idx),
 			commitmentMsg.BundleSize)
@@ -1033,6 +1031,12 @@ func (c *consensusRuntime) IsProposer(id []byte, height, round uint64) bool {
 }
 
 func (c *consensusRuntime) IsValidProposalHash(proposal, hash []byte) bool {
+	if len(proposal) == 0 {
+		c.logger.Error("proposal hash is not valid because proposal is empty")
+
+		return false
+	}
+
 	block := types.Block{}
 	if err := block.UnmarshalRLP(proposal); err != nil {
 		c.logger.Error("unable to unmarshal proposal", "error", err)
@@ -1170,6 +1174,12 @@ func (c *consensusRuntime) BuildPrePrepareMessage(
 	certificate *proto.RoundChangeCertificate,
 	view *proto.View,
 ) *proto.Message {
+	if len(proposal) == 0 {
+		c.logger.Error("can not build pre-prepare message, since proposal is empty")
+
+		return nil
+	}
+
 	block := types.Block{}
 	if err := block.UnmarshalRLP(proposal); err != nil {
 		c.logger.Error(fmt.Sprintf("cannot unmarshal RLP: %s", err))
