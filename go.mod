@@ -53,7 +53,7 @@ require (
 	github.com/umbracle/ethgo v0.1.4-0.20220722090909-c8ac32939570
 	github.com/valyala/fastjson v1.6.3 // indirect
 	go.uber.org/zap v1.22.0 // indirect
-	golang.org/x/sys v0.0.0-20220811171246-fbc7d0a398ab // indirect
+	golang.org/x/sys v0.3.0 // indirect
 	golang.org/x/tools v0.1.12 // indirect
 	google.golang.org/genproto v0.0.0-20220920201722-2b89144ce006
 	gopkg.in/yaml.v3 v3.0.1
@@ -65,11 +65,7 @@ require (
 	go.uber.org/atomic v1.10.0
 )
 
-require (
-	github.com/0xPolygon/go-ibft v0.0.0-20220810095021-e43142f8d267
-	go.uber.org/atomic v1.10.0
-	gopkg.in/DataDog/dd-trace-go.v1 v1.42.1
-)
+require gopkg.in/DataDog/dd-trace-go.v1 v1.42.1
 
 require (
 	cloud.google.com/go v0.104.0 // indirect
