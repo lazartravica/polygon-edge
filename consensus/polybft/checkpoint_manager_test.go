@@ -3,15 +3,14 @@ package polybft
 import (
 	"errors"
 	"github.com/0xPolygon/polygon-edge/chain"
+	"github.com/0xPolygon/polygon-edge/consensus/polybft/contractsapi"
 	"github.com/0xPolygon/polygon-edge/contracts"
-	"github.com/0xPolygon/polygon-edge/helper/hex"
 	"github.com/0xPolygon/polygon-edge/state"
 	"github.com/hashicorp/go-hclog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"github.com/umbracle/ethgo"
-	"github.com/umbracle/ethgo/testutil"
 	"math/big"
 	"strconv"
 	"testing"
@@ -273,19 +272,19 @@ func TestCheckpointManager_isCheckpointBlock(t *testing.T) {
 func TestPerformExit(t *testing.T) {
 	t.Parallel()
 
-	//read required contract artifacts
-	scpath := "../../core-contracts/artifacts/contracts/"
-	rootchainArtifact, err := ReadArtifact(scpath, "root/CheckpointManager.sol", "CheckpointManager")
-	require.NoError(t, err)
-	blsArtifact, err := ReadArtifact(scpath, "common/BLS.sol", "BLS")
-	require.NoError(t, err)
-	bls256Artifact, err := ReadArtifact(scpath, "common/BN256G2.sol", "BN256G2")
-	require.NoError(t, err)
-	exitHelper, err := ReadArtifact(scpath, "root/ExitHelper.sol", "ExitHelper")
-	require.NoError(t, err)
-	//todo move out from core contracts
-	l1Art, err := ReadArtifact(scpath, "root/L1.sol", "L1")
-	require.NoError(t, err)
+	////read required contract artifacts
+	//scpath := "../../core-contracts/artifacts/contracts/"
+	//rootchainArtifact, err := contractsapi.ReadArtifact(scpath, "root/CheckpointManager.sol", "CheckpointManager")
+	//require.NoError(t, err)
+	//blsArtifact, err := ReadArtifact(scpath, "common/BLS.sol", "BLS")
+	//require.NoError(t, err)
+	//bls256Artifact, err := ReadArtifact(scpath, "common/BN256G2.sol", "BN256G2")
+	//require.NoError(t, err)
+	//exitHelper, err := ReadArtifact(scpath, "root/ExitHelper.sol", "ExitHelper")
+	//require.NoError(t, err)
+	////todo move out from core contracts
+	//l1Art, err := ReadArtifact(scpath, "root/L1.sol", "L1")
+	//require.NoError(t, err)
 
 	//create validator set
 	currentValidators := newTestValidatorsWithAliases([]string{"A", "B", "C", "D"}, []uint64{100, 100, 100, 100})
@@ -300,18 +299,18 @@ func TestPerformExit(t *testing.T) {
 			Balance: big.NewInt(100000000000),
 		},
 		contracts.BLSContract: &chain.GenesisAccount{
-			Code: blsArtifact.DeployedBytecode,
+			Code: contractsapi.BLS.DeployedBytecode,
 		},
 		bn256Addr: &chain.GenesisAccount{
-			Code: bls256Artifact.DeployedBytecode,
+			Code: contractsapi.BLS256.DeployedBytecode,
 		},
 		l1Cntract: &chain.GenesisAccount{
-			Code: l1Art.DeployedBytecode,
+			Code: contractsapi.L1Exit.DeployedBytecode,
 		},
 	}
 	transition := newTestTransition(t, alloc)
 
-	getField := func(addr types.Address, artifact *Artifact, function string, args ...interface{}) []byte {
+	getField := func(addr types.Address, artifact *contractsapi.Artifact, function string, args ...interface{}) []byte {
 		input, err := artifact.Abi.GetMethod(function).Encode(args)
 		require.NoError(t, err)
 
@@ -322,10 +321,10 @@ func TestPerformExit(t *testing.T) {
 		return result.ReturnValue
 	}
 
-	rootchainContractAddress := deployRootchainContract(t, transition, rootchainArtifact, senderAddress, accSet, bn256Addr)
-	exitHelperContractAddress := deployExitContract(t, transition, exitHelper, senderAddress, rootchainContractAddress)
+	rootchainContractAddress := deployRootchainContract(t, transition, contractsapi.Rootchain, senderAddress, accSet, bn256Addr)
+	exitHelperContractAddress := deployExitContract(t, transition, contractsapi.ExitHelper, senderAddress, rootchainContractAddress)
 
-	require.Equal(t, getField(rootchainContractAddress, rootchainArtifact, "currentCheckpointBlockNumber")[31], uint8(0))
+	require.Equal(t, getField(rootchainContractAddress, contractsapi.Rootchain, "currentCheckpointBlockNumber")[31], uint8(0))
 
 	cm := CheckpointManager{
 		blockchain: &blockchainMock{},
@@ -403,10 +402,10 @@ func TestPerformExit(t *testing.T) {
 	require.NoError(t, result.Err)
 	require.True(t, result.Succeeded())
 	require.False(t, result.Failed())
-	require.Equal(t, getField(rootchainContractAddress, rootchainArtifact, "currentCheckpointBlockNumber")[31], uint8(1))
+	require.Equal(t, getField(rootchainContractAddress, contractsapi.Rootchain, "currentCheckpointBlockNumber")[31], uint8(1))
 
 	//check that the exit havent performed
-	res := getField(exitHelperContractAddress, exitHelper, "processedExits", exits[0].ID)
+	res := getField(exitHelperContractAddress, contractsapi.ExitHelper, "processedExits", exits[0].ID)
 	require.Equal(t, int(res[31]), 0)
 
 	proofExitEvent, err := ExitEventABIType.Encode(exits[0])
@@ -416,7 +415,7 @@ func TestPerformExit(t *testing.T) {
 	leafIndex, err := exitTrie.LeafIndex(proofExitEvent)
 	require.NoError(t, err)
 	t.Log("proof", proof)
-	ehExit, err := exitHelper.Abi.GetMethod("exit").Encode([]interface{}{
+	ehExit, err := contractsapi.ExitHelper.Abi.GetMethod("exit").Encode([]interface{}{
 		blockNumber,
 		leafIndex,
 		proofExitEvent,
@@ -430,20 +429,20 @@ func TestPerformExit(t *testing.T) {
 	require.False(t, result.Failed())
 
 	//check true
-	res = getField(exitHelperContractAddress, exitHelper, "processedExits", exits[0].ID)
+	res = getField(exitHelperContractAddress, contractsapi.ExitHelper, "processedExits", exits[0].ID)
 	require.Equal(t, int(res[31]), 1)
 
-	lastID := getField(l1Cntract, l1Art, "id")
+	lastID := getField(l1Cntract, contractsapi.L1Exit, "id")
 	require.Equal(t, lastID[31], uint8(1))
-	lastAddr := getField(l1Cntract, l1Art, "addr")
+	lastAddr := getField(l1Cntract, contractsapi.L1Exit, "addr")
 	require.Equal(t, exits[0].Sender[:], lastAddr[12:])
-	lastCounter := getField(l1Cntract, l1Art, "counter")
+	lastCounter := getField(l1Cntract, contractsapi.L1Exit, "counter")
 	require.Equal(t, lastCounter[31], uint8(1))
 	//todo a strange data
 	//require.Equal(t, getField(l1Cntract, l1Art, "data"), exits[0].Data)
 }
 
-func deployRootchainContract(t *testing.T, transition *state.Transition, rootchainArtifact *Artifact, sender types.Address, accSet AccountSet, bn256Addr types.Address) types.Address {
+func deployRootchainContract(t *testing.T, transition *state.Transition, rootchainArtifact *contractsapi.Artifact, sender types.Address, accSet AccountSet, bn256Addr types.Address) types.Address {
 	result := transition.Create2(sender, rootchainArtifact.Bytecode, big.NewInt(0), 1000000000)
 	assert.NoError(t, result.Err)
 	rcAddress := result.Address
@@ -469,7 +468,7 @@ func deployRootchainContract(t *testing.T, transition *state.Transition, rootcha
 	return rcAddress
 }
 
-func deployExitContract(t *testing.T, transition *state.Transition, exitHelperArtifcat *Artifact, sender types.Address, rootchainContractAddress types.Address) types.Address {
+func deployExitContract(t *testing.T, transition *state.Transition, exitHelperArtifcat *contractsapi.Artifact, sender types.Address, rootchainContractAddress types.Address) types.Address {
 	result := transition.Create2(sender, exitHelperArtifcat.Bytecode, big.NewInt(0), 1000000000)
 	assert.NoError(t, result.Err)
 	ehAddress := result.Address
@@ -483,33 +482,6 @@ func deployExitContract(t *testing.T, transition *state.Transition, exitHelperAr
 	require.False(t, result.Failed())
 
 	return ehAddress
-}
-
-func TestName1(t *testing.T) {
-	L2Contract(t)
-}
-
-func L2Contract(t *testing.T) {
-	cc := &testutil.Contract{}
-	cc.AddCallback(func() string {
-		return `
-		uint256 public counter;
-		uint256 public lastCommittedId;
-		
-		function setNextExecutionIndex(uint256 _index) public payable {
-			counter = _index;
-		}
-		function setNextCommittedIndex(uint256 _index) public payable {
-			lastCommittedId = _index;
-		}`
-	})
-
-	solcContract, err := cc.Compile()
-	require.NoError(t, err)
-
-	bin, err := hex.DecodeString(solcContract.Bin)
-	require.NoError(t, err)
-	_ = bin
 }
 
 var _ txrelayer.TxRelayer = (*dummyTxRelayer)(nil)

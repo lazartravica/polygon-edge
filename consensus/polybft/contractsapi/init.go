@@ -1,35 +1,53 @@
 package contractsapi
 
 import (
-	"github.com/0xPolygon/polygon-edge/consensus/polybft"
+	"fmt"
+	"path"
+	"runtime"
 )
 
 var (
-	Rootchain     *polybft.Artifact
-	ExitHelper    *polybft.Artifact
-	L1Exit        *polybft.Artifact
-	L2StateSender *polybft.Artifact
+	Rootchain     *Artifact
+	ExitHelper    *Artifact
+	L1Exit        *Artifact
+	L2StateSender *Artifact
+	BLS           *Artifact
+	BLS256        *Artifact
 )
 
 func init() {
-	scpath := "../core-contracts/artifacts/contracts/"
+	_, filename, _, _ := runtime.Caller(0)
+	fmt.Println(filename)
+	scpath := path.Join(path.Dir(filename), "../../../core-contracts/artifacts/contracts/")
+
 	var err error
-	Rootchain, err = polybft.ReadArtifact(scpath, "root/CheckpointManager.sol", "CheckpointManager")
+	Rootchain, err = ReadArtifact(scpath, "root/CheckpointManager.sol", "CheckpointManager")
 	if err != nil {
 		panic(err)
 	}
-	ExitHelper, err = polybft.ReadArtifact(scpath, "root/ExitHelper.sol", "ExitHelper")
-	if err != nil {
-		panic(err)
-	}
-
-	L1Exit, err = polybft.ReadArtifact(scpath, "root/L1.sol", "L1")
+	ExitHelper, err = ReadArtifact(scpath, "root/ExitHelper.sol", "ExitHelper")
 	if err != nil {
 		panic(err)
 	}
 
-	L2StateSender, err = polybft.ReadArtifact(scpath, "child/L2StateSender.sol", "L2StateSender")
+	L1Exit, err = ReadArtifact(scpath, "root/L1.sol", "L1")
 	if err != nil {
 		panic(err)
 	}
+
+	L2StateSender, err = ReadArtifact(scpath, "child/L2StateSender.sol", "L2StateSender")
+	if err != nil {
+		panic(err)
+	}
+
+	BLS, err = ReadArtifact(scpath, "common/BLS.sol", "BLS")
+	if err != nil {
+		panic(err)
+	}
+
+	BLS256, err = ReadArtifact(scpath, "common/BN256G2.sol", "BN256G2")
+	if err != nil {
+		panic(err)
+	}
+
 }
