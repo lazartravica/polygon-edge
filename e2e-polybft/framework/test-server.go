@@ -118,7 +118,7 @@ func (t *TestServer) Start() {
 		// grpc port
 		"--grpc-address", fmt.Sprintf("localhost:%d", config.GRPCPort),
 		// enable jsonrpc
-		"--jsonrpc", fmt.Sprintf(":%d", config.JSONRPCPort),
+		"--jsonrpc", fmt.Sprintf("localhost:%d", config.JSONRPCPort),
 	}
 
 	if len(config.LogLevel) > 0 {

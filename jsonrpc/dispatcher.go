@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/davecgh/go-spew/spew"
 	"math"
 	"reflect"
 	"strings"
@@ -109,6 +110,8 @@ func (d *Dispatcher) registerEndpoints(store JSONRPCStore) {
 	d.registerService("web3", d.endpoints.Web3)
 	d.registerService("txpool", d.endpoints.TxPool)
 	d.registerService("bridge", d.endpoints.Bridge)
+	fmt.Println("bridge")
+	spew.Dump(d.serviceMap)
 	d.registerService("debug", d.endpoints.Debug)
 }
 
@@ -328,7 +331,7 @@ func (d *Dispatcher) Handle(reqBody []byte) ([]byte, error) {
 }
 
 func (d *Dispatcher) handleReq(req Request) ([]byte, Error) {
-	d.logger.Debug("request", "method", req.Method, "id", req.ID)
+	d.logger.Info("request", "method", req.Method, "id", req.ID, "params", req.Params)
 
 	service, fd, ferr := d.getFnHandler(req)
 	if ferr != nil {

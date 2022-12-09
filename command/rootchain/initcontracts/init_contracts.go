@@ -1,16 +1,15 @@
 package initcontracts
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/0xPolygon/polygon-edge/consensus/polybft"
 	"io/ioutil"
 	"math/big"
 	"os"
 	"path"
 	"path/filepath"
-	"sort"
 	"strconv"
 	"strings"
 
@@ -283,32 +282,22 @@ func validatorSetToABISlice(allocs map[types.Address]*chain.GenesisAccount) ([]m
 		return nil, err
 	}
 
-	validatorSetMap := make([]map[string]interface{}, len(validatorsInfo))
-
-	sort.Slice(validatorsInfo, func(i, j int) bool {
-		return bytes.Compare(validatorsInfo[i].Address.Bytes(),
-			validatorsInfo[j].Address.Bytes()) < 0
-	})
-
-	for i, validatorInfo := range validatorsInfo {
-		genesisBalance, err := chain.GetGenesisAccountBalance(validatorInfo.Address, allocs)
-		if err != nil {
-			return nil, err
-		}
-
+	accSet := polybft.AccountSet{}
+	for _, validatorInfo := range validatorsInfo {
 		blsKey, err := validatorInfo.UnmarshalBLSPublicKey()
 		if err != nil {
 			return nil, err
 		}
 
-		validatorSetMap[i] = map[string]interface{}{
-			"_address":    validatorInfo.Address,
-			"blsKey":      blsKey.ToBigInt(),
-			"votingPower": chain.ConvertWeiToTokensAmount(genesisBalance),
-		}
+		accSet = append(accSet, &polybft.ValidatorMetadata{
+			Address:     validatorInfo.Address,
+			BlsKey:      blsKey,
+			VotingPower: chain.ConvertWeiToTokensAmount(allocs[validatorInfo.Address].Balance).Uint64(),
+		})
+		fmt.Println(accSet)
 	}
 
-	return validatorSetMap, nil
+	return accSet.AsGenericMaps(), nil
 }
 
 func readContractBytecode(rootPath, contractPath, contractName string) ([]byte, error) {

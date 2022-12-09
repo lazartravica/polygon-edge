@@ -33,8 +33,9 @@ var (
 	defaultCheckpointsOffset = uint64(900)
 )
 
-// checkpointManager encapsulates logic for checkpoint data submission
-type checkpointManager struct {
+// CheckpointManager encapsulates logic for checkpoint data submission
+type CheckpointManager struct {
+	ChainID uint64
 	// key is the identity of the node submitting a checkpoint
 	key ethgo.Key
 	// blockchain is abstraction for blockchain
@@ -51,10 +52,11 @@ type checkpointManager struct {
 	logger hclog.Logger
 }
 
-// newCheckpointManager creates a new instance of checkpointManager
+// newCheckpointManager creates a new instance of CheckpointManager
 func newCheckpointManager(key ethgo.Key, checkpointOffset uint64, txRelayer txrelayer.TxRelayer,
-	blockchain blockchainBackend, backend polybftBackend, logger hclog.Logger) *checkpointManager {
-	return &checkpointManager{
+	blockchain blockchainBackend, backend polybftBackend, logger hclog.Logger) *CheckpointManager {
+	return &CheckpointManager{
+		ChainID:           blockchain.GetChainID(),
 		key:               key,
 		blockchain:        blockchain,
 		consensusBackend:  backend,
@@ -65,7 +67,7 @@ func newCheckpointManager(key ethgo.Key, checkpointOffset uint64, txRelayer txre
 }
 
 // getLatestCheckpointBlock queries CheckpointManager smart contract and retrieves latest checkpoint block number
-func (c *checkpointManager) getLatestCheckpointBlock() (uint64, error) {
+func (c *CheckpointManager) getLatestCheckpointBlock() (uint64, error) {
 	checkpointBlockNumMethodEncoded, err := currentCheckpointBlockNumMethod.Encode([]interface{}{})
 	if err != nil {
 		return 0, fmt.Errorf("failed to encode currentCheckpointId function parameters: %w", err)
@@ -89,13 +91,12 @@ func (c *checkpointManager) getLatestCheckpointBlock() (uint64, error) {
 }
 
 // submitCheckpoint sends a transaction with checkpoint data to the rootchain
-func (c *checkpointManager) submitCheckpoint(latestHeader types.Header, isEndOfEpoch bool) error {
+func (c *CheckpointManager) submitCheckpoint(latestHeader types.Header, isEndOfEpoch bool) error {
 	lastCheckpointBlockNumber, err := c.getLatestCheckpointBlock()
 	c.logger.Info("getLatestCheckpointBlock", "lastCheckpointBlockNumber", lastCheckpointBlockNumber, "err", err)
 	if err != nil {
 		return err
 	}
-
 	c.logger.Debug("submitCheckpoint invoked...",
 		"latest checkpoint block", lastCheckpointBlockNumber,
 		"checkpoint block", latestHeader.Number)
@@ -172,9 +173,9 @@ func (c *checkpointManager) submitCheckpoint(latestHeader types.Header, isEndOfE
 
 // encodeAndSendCheckpoint encodes checkpoint data for the given block and
 // sends a transaction to the CheckpointManager rootchain contract
-func (c *checkpointManager) encodeAndSendCheckpoint(txn *ethgo.Transaction,
+func (c *CheckpointManager) encodeAndSendCheckpoint(txn *ethgo.Transaction,
 	header types.Header, extra Extra, isEndOfEpoch bool) error {
-	c.logger.Debug("send checkpoint txn...", "block number", header.Number)
+	c.logger.Warn("send checkpoint txn...", "block number", header.Number)
 
 	nextEpochValidators := AccountSet{}
 
@@ -187,7 +188,7 @@ func (c *checkpointManager) encodeAndSendCheckpoint(txn *ethgo.Transaction,
 		}
 	}
 
-	input, err := c.abiEncodeCheckpointBlock(header.Number, header.Hash, extra, nextEpochValidators)
+	input, err := c.AbiEncodeCheckpointBlock(header.Number, header.Hash, extra, nextEpochValidators)
 	if err != nil {
 		return fmt.Errorf("failed to encode checkpoint data to ABI for block %d: %w", header.Number, err)
 	}
@@ -208,8 +209,8 @@ func (c *checkpointManager) encodeAndSendCheckpoint(txn *ethgo.Transaction,
 	return nil
 }
 
-// abiEncodeCheckpointBlock encodes checkpoint data into ABI format for a given header
-func (c *checkpointManager) abiEncodeCheckpointBlock(blockNumber uint64, blockHash types.Hash, extra Extra,
+// AbiEncodeCheckpointBlock encodes checkpoint data into ABI format for a given header
+func (c *CheckpointManager) AbiEncodeCheckpointBlock(blockNumber uint64, blockHash types.Hash, extra Extra,
 	nextValidators AccountSet) ([]byte, error) {
 	aggs, err := bls.UnmarshalSignature(extra.Committed.AggregatedSignature)
 	if err != nil {
@@ -222,7 +223,7 @@ func (c *checkpointManager) abiEncodeCheckpointBlock(blockNumber uint64, blockHa
 	}
 
 	params := map[string]interface{}{
-		"chainId": new(big.Int).SetUint64(c.blockchain.GetChainID()),
+		"chainId": new(big.Int).SetUint64(c.ChainID),
 		"checkpointMetadata": map[string]interface{}{
 			"blockHash":               blockHash,
 			"blockRound":              new(big.Int).SetUint64(extra.Checkpoint.BlockRound),
@@ -243,6 +244,6 @@ func (c *checkpointManager) abiEncodeCheckpointBlock(blockNumber uint64, blockHa
 
 // isCheckpointBlock returns true for blocks in the middle of the epoch
 // which are offseted by predefined count of blocks
-func (c *checkpointManager) isCheckpointBlock(blockNumber uint64) bool {
+func (c *CheckpointManager) isCheckpointBlock(blockNumber uint64) bool {
 	return blockNumber == c.latestCheckpointID+c.checkpointsOffset
 }

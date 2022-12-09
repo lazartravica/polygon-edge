@@ -79,7 +79,8 @@ func TestCheckpointManager_submitCheckpoint(t *testing.T) {
 	blockchainMock.On("GetHeaderByNumber", mock.Anything).Return(headersMap.getHeader)
 
 	validatorAcc := validators.getValidator("A")
-	c := &checkpointManager{
+	c := &CheckpointManager{
+		ChainID:          blockchainMock.GetChainID(),
 		key:              wallet.NewEcdsaSigner(validatorAcc.Key()),
 		txRelayer:        txRelayerMock,
 		consensusBackend: backendMock,
@@ -139,12 +140,12 @@ func TestCheckpointManager_abiEncodeCheckpointBlock(t *testing.T) {
 	backendMock := new(polybftBackendMock)
 	backendMock.On("GetValidators", mock.Anything, mock.Anything).Return(currentValidators.getPublicIdentities())
 
-	c := &checkpointManager{
+	c := &CheckpointManager{
 		blockchain:       &blockchainMock{},
 		consensusBackend: backendMock,
 		logger:           hclog.NewNullLogger(),
 	}
-	checkpointDataEncoded, err := c.abiEncodeCheckpointBlock(header.Number, header.Hash, *extra, nextValidators.getPublicIdentities())
+	checkpointDataEncoded, err := c.AbiEncodeCheckpointBlock(header.Number, header.Hash, *extra, nextValidators.getPublicIdentities())
 	require.NoError(t, err)
 
 	decodedCheckpointData, err := submitCheckpointMethod.Inputs.Decode(checkpointDataEncoded[4:])
@@ -216,7 +217,7 @@ func TestCheckpointManager_getCurrentCheckpointID(t *testing.T) {
 				Return(c.checkpointID, c.returnError).
 				Once()
 
-			checkpointMgr := &checkpointManager{
+			checkpointMgr := &CheckpointManager{
 				txRelayer: txRelayerMock,
 				key:       wallet.GenerateAccount().Ecdsa,
 				logger:    hclog.NewNullLogger(),
@@ -326,7 +327,7 @@ func TestPerformExit(t *testing.T) {
 
 	require.Equal(t, getField(rootchainContractAddress, rootchainArtifact, "currentCheckpointBlockNumber")[31], uint8(0))
 
-	cm := checkpointManager{
+	cm := CheckpointManager{
 		blockchain: &blockchainMock{},
 	}
 	accSetHash, err := accSet.Hash()
@@ -391,7 +392,7 @@ func TestPerformExit(t *testing.T) {
 		Bitmap:              bmp,
 	}
 
-	submitCheckpointEncoded, err := cm.abiEncodeCheckpointBlock(
+	submitCheckpointEncoded, err := cm.AbiEncodeCheckpointBlock(
 		blockNumber,
 		blockHash,
 		extra,
@@ -408,13 +409,13 @@ func TestPerformExit(t *testing.T) {
 	res := getField(exitHelperContractAddress, exitHelper, "processedExits", exits[0].ID)
 	require.Equal(t, int(res[31]), 0)
 
-	proofExitEvent, err := exitEventABIType.Encode(exits[0])
+	proofExitEvent, err := ExitEventABIType.Encode(exits[0])
 	require.NoError(t, err)
 	proof, err := exitTrie.GenerateProofForLeaf(proofExitEvent, 0)
 	require.NoError(t, err)
 	leafIndex, err := exitTrie.LeafIndex(proofExitEvent)
 	require.NoError(t, err)
-
+	t.Log("proof", proof)
 	ehExit, err := exitHelper.Abi.GetMethod("exit").Encode([]interface{}{
 		blockNumber,
 		leafIndex,

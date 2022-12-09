@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/davecgh/go-spew/spew"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -119,7 +120,7 @@ type consensusRuntime struct {
 	activeValidatorFlag uint32
 
 	// checkpointManager represents abstraction for checkpoint submission
-	checkpointManager *checkpointManager
+	checkpointManager *CheckpointManager
 
 	// logger instance
 	logger hcf.Logger
@@ -874,33 +875,47 @@ func (c *consensusRuntime) BuildEventRoot(epoch uint64, nonCommittedExitEvents [
 	if err != nil {
 		return types.ZeroHash, err
 	}
+	fmt.Println("allEvents", tree.Hash())
+	spew.Dump(allEvents)
 
 	return tree.Hash(), nil
 }
 
 // GenerateExitProof generates proof of exit
 func (c *consensusRuntime) GenerateExitProof(exitID, epoch, checkpointBlock uint64) ([]types.Hash, error) {
+	fmt.Println("GenerateExitProof", exitID, epoch, checkpointBlock)
 	exitEvent, err := c.state.getExitEvent(exitID, epoch, checkpointBlock)
 	if err != nil {
 		return nil, err
 	}
+	fmt.Println(exitEvent)
 
-	e, err := exitEventABIType.Encode(exitEvent)
+	e, err := ExitEventABIType.Encode(exitEvent)
 	if err != nil {
 		return nil, err
 	}
 
-	exitEvents, err := c.state.getExitEventsForProof(epoch, checkpointBlock)
+	fmt.Println("e", e)
+
+	exitEvents, err := c.state.getExitEventsForProof(epoch, 20)
 	if err != nil {
 		return nil, err
 	}
+
+	spew.Dump(exitEvents)
 
 	tree, err := createExitTree(exitEvents)
 	if err != nil {
 		return nil, err
 	}
 
-	return tree.GenerateProofForLeaf(e, 0)
+	proof, err := tree.GenerateProofForLeaf(e, 0)
+
+	fmt.Println("trie hash", tree.Hash(), "proof", proof)
+	fmt.Println(tree.LeafIndex(e))
+	fmt.Println(err)
+
+	return proof, err
 }
 
 // GetStateSyncProof returns the proof of the bundle for the state sync
@@ -1109,6 +1124,7 @@ func (c *consensusRuntime) InsertBlock(proposal []byte, committedSeals []*messag
 				go func(header types.Header, epochNumber uint64) {
 					c.logger.Info("submit checkpoint", "header", header.Number, "eoe", fsm.isEndOfEpoch)
 					err := c.checkpointManager.submitCheckpoint(header, fsm.isEndOfEpoch)
+					c.logger.Warn("submit checkpoint succccessful")
 					if err != nil {
 						c.logger.Warn("failed to submit checkpoint",
 							"block", header.Number,
@@ -1324,7 +1340,7 @@ func createExitTree(exitEvents []*ExitEvent) (*MerkleTree, error) {
 	data := make([][]byte, numOfEvents)
 
 	for i := 0; i < numOfEvents; i++ {
-		b, err := exitEventABIType.Encode(exitEvents[i])
+		b, err := ExitEventABIType.Encode(exitEvents[i])
 		if err != nil {
 			return nil, err
 		}
