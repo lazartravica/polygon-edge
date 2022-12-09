@@ -884,7 +884,7 @@ func (c *consensusRuntime) BuildEventRoot(epoch uint64, nonCommittedExitEvents [
 // GenerateExitProof generates proof of exit
 func (c *consensusRuntime) GenerateExitProof(exitID, epoch, checkpointBlock uint64) ([]types.Hash, error) {
 	fmt.Println("GenerateExitProof", exitID, epoch, checkpointBlock)
-	exitEvent, err := c.state.getExitEvent(exitID, epoch, checkpointBlock)
+	exitEvent, err := c.state.getExitEvent(exitID, epoch)
 	if err != nil {
 		return nil, err
 	}
@@ -895,9 +895,7 @@ func (c *consensusRuntime) GenerateExitProof(exitID, epoch, checkpointBlock uint
 		return nil, err
 	}
 
-	fmt.Println("e", e)
-
-	exitEvents, err := c.state.getExitEventsForProof(epoch, 20)
+	exitEvents, err := c.state.getExitEventsForProof(epoch, checkpointBlock)
 	if err != nil {
 		return nil, err
 	}

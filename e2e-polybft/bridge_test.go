@@ -7,7 +7,7 @@ import (
 	"github.com/0xPolygon/polygon-edge/command/genesis"
 	"github.com/0xPolygon/polygon-edge/command/rootchain/helper"
 	"github.com/0xPolygon/polygon-edge/consensus/polybft"
-	"github.com/0xPolygon/polygon-edge/consensus/polybft/artifacts"
+	"github.com/0xPolygon/polygon-edge/consensus/polybft/contractsapi"
 	"io"
 	"math/big"
 	"net/http"
@@ -182,21 +182,6 @@ func TestE2E_Bridge_L2toL1Exit(t *testing.T) {
 	key, err := ethgow.GenerateKey()
 	require.NoError(t, err)
 
-	//scpath := "../core-contracts/artifacts/contracts/"
-	//rootchainArtifact, err := polybft.ReadArtifact(scpath, "root/CheckpointManager.sol", "CheckpointManager")
-	//require.NoError(t, err)
-	//exitHelperArtifact, err := polybft.ReadArtifact(scpath, "root/ExitHelper.sol", "ExitHelper")
-	//require.NoError(t, err)
-	//L1Artifact, err := polybft.ReadArtifact(scpath, "root/L1.sol", "L1")
-	//require.NoError(t, err)
-	//L2StateSenderArtifact, err := polybft.ReadArtifact(scpath, "child/L2StateSender.sol", "L2StateSender")
-	//require.NoError(t, err)
-
-	input, err := artifacts.Rootchain.Abi.GetMethod("currentEpoch").Encode([]interface{}{})
-	require.NoError(t, err)
-	inputBN, err := artifacts.Rootchain.Abi.GetMethod("currentCheckpointBlockNumber").Encode([]interface{}{})
-	require.NoError(t, err)
-
 	cluster := framework.NewTestCluster(t, 5,
 		framework.WithBridge(),
 		framework.WithPremine(types.Address(key.Address())),
@@ -206,224 +191,84 @@ func TestE2E_Bridge_L2toL1Exit(t *testing.T) {
 	// wait for a couple of blocks
 	require.NoError(t, cluster.WaitForBlock(2, 2*time.Minute))
 
-	validators, err := genesis.ReadValidatorsByRegexp(cluster.Config.TmpDir, cluster.Config.ValidatorPrefix)
-	require.NoError(t, err)
-
-	rootchainClient, err := jsonrpc.NewClient(txrelayer.DefaultRPCAddress)
-	require.NoError(t, err)
-
+	//init rpc clients
 	txRelayer, err := txrelayer.NewTxRelayer(txrelayer.WithIPAddress(txrelayer.DefaultRPCAddress))
+	require.NoError(t, err)
 	l2Relayer, err := txrelayer.NewTxRelayer(txrelayer.WithIPAddress(cluster.Servers[0].JSONRPCAddr()))
 	require.NoError(t, err)
 
-	for i := range validators {
-		fundAddr := ethgo.Address(validators[i].Address)
-		txn := &ethgo.Transaction{
-			To:    &fundAddr,
-			Value: big.NewInt(1000000000000000000),
-		}
+	//add balance to validators for sending checkpoints
+	validators, err := genesis.ReadValidatorsByRegexp(cluster.Config.TmpDir, cluster.Config.ValidatorPrefix)
+	require.NoError(t, err)
+	FundValidators(t, txRelayer, validators)
 
-		receipt, err := txRelayer.SendTransactionLocal(txn)
-		t.Log(receipt, err)
-		if receipt != nil && receipt.Status == uint64(types.ReceiptSuccess) {
-			t.Log("Funded", fundAddr)
-		}
-	}
-	t.Log("balances")
-	for _, v := range validators {
-		b, err := rootchainClient.Eth().GetBalance(ethgo.Address(v.Address), ethgo.Latest)
-		require.NoError(t, err)
-		t.Log(v.Address, b.Uint64())
-	}
-
-	receipt, err := txRelayer.SendTransaction(&ethgo.Transaction{
-		To:    nil, // contract deployment
-		Input: artifacts.L1Exit.Bytecode,
-	}, helper.GetRootchainAdminKey())
+	//deploy l1,l2, ExitHelper contracts
+	receipt, err := DeployTransaction(txRelayer, helper.GetRootchainAdminKey(), contractsapi.L1Exit.Bytecode)
 	require.NoError(t, err)
 	l1ContractAddress := receipt.ContractAddress
-	t.Log("l1 deploy", l1ContractAddress, receipt.Status)
-
-	tx := &ethgo.Transaction{
-		From:  ethgo.Address(validators[0].Address),
-		Input: artifacts.L2StateSender.Bytecode,
-	}
-	receipt, err = l2Relayer.SendTransaction(tx, key)
+	receipt, err = DeployTransaction(l2Relayer, key, contractsapi.L2StateSender.Bytecode)
 	require.NoError(t, err)
 	l2StateSenderAddress := receipt.ContractAddress
-	t.Log(l2StateSenderAddress, receipt.Status)
-
-	stateSenderData := []byte{123}
-	//syncState(address receiver, bytes calldata data) external
-	stateSenderInput, err := artifacts.L2StateSender.Abi.GetMethod("syncState").Encode([]interface{}{
-		l1ContractAddress,
-		stateSenderData,
-	})
-	require.NoError(t, err)
-	receipt, err = l2Relayer.SendTransaction(&ethgo.Transaction{
-		To:    &l2StateSenderAddress,
-		Input: stateSenderInput,
-	}, key)
-	require.NoError(t, err)
-	t.Log(receipt.Status, receipt.BlockNumber)
-	l2SenderBlock := receipt.BlockNumber
-
-	receipt, err = l2Relayer.SendTransaction(&ethgo.Transaction{
-		To:    &l2StateSenderAddress,
-		Input: stateSenderInput,
-	}, key)
-	require.NoError(t, err)
-	t.Log(receipt.Status, receipt.BlockNumber)
-
-	receipt, err = txRelayer.SendTransaction(&ethgo.Transaction{
-		To:    nil, // contract deployment
-		Input: artifacts.ExitHelper.Bytecode,
-	}, helper.GetRootchainAdminKey())
+	receipt, err = DeployTransaction(txRelayer, helper.GetRootchainAdminKey(), contractsapi.ExitHelper.Bytecode)
 	require.NoError(t, err)
 	exitHelperContractAddress := ethgo.Address(receipt.ContractAddress)
-	t.Log("exitHelperContractAddress deploy", exitHelperContractAddress, receipt.Status)
-
-	exitHelperInit, err := artifacts.ExitHelper.Abi.GetMethod("initialize").Encode([]interface{}{helper.CheckpointManagerAddress})
+	receipt, err = ABITransaction(txRelayer, helper.GetRootchainAdminKey(), contractsapi.ExitHelper, exitHelperContractAddress, "initialize", helper.CheckpointManagerAddress)
 	require.NoError(t, err)
-	receipt, err = txRelayer.SendTransaction(&ethgo.Transaction{
-		To:    &exitHelperContractAddress, // contract deployment
-		Input: exitHelperInit,
-	}, helper.GetRootchainAdminKey())
+
+	//Start test
+	//send crosschain transaction on l2
+	stateSenderData := []byte{123}
+	receipt, err = ABITransaction(l2Relayer, key, contractsapi.L2StateSender, l2StateSenderAddress, "syncState", l1ContractAddress, stateSenderData)
+	require.NoError(t, err)
+	require.Equal(t, receipt.Status, uint64(types.ReceiptSuccess))
+
+	l2SenderBlock := receipt.BlockNumber
+	l2SenderBlockData, err := cluster.Servers[0].JSONRPC().Eth().GetBlockByNumber(ethgo.BlockNumber(l2SenderBlock), true)
+	require.NoError(t, err)
+	extra, err := polybft.GetIbftExtra(l2SenderBlockData.ExtraData)
+	require.NoError(t, err)
+
+	receipt, err = ABITransaction(l2Relayer, key, contractsapi.L2StateSender, l2StateSenderAddress, "syncState", l1ContractAddress, stateSenderData)
+	require.Equal(t, receipt.Status, uint64(types.ReceiptSuccess))
 	require.NoError(t, err)
 
 	checkpointManagerAddress := ethgo.Address(helper.CheckpointManagerAddress)
 	for {
-		t.Log(rootchainClient.Eth().Call(&ethgo.CallMsg{
-			From: helper.GetRootchainAdminKey().Address(),
-			To:   &checkpointManagerAddress,
-			Data: input,
-		}, ethgo.Latest))
-		t.Log(rootchainClient.Eth().Call(&ethgo.CallMsg{
-			From: helper.GetRootchainAdminKey().Address(),
-			To:   &checkpointManagerAddress,
-			Data: inputBN,
-		}, ethgo.Latest))
-
-		blockNumber, err := cluster.Servers[0].JSONRPC().Eth().BlockNumber()
+		currentEpochString, err := ABICall(txRelayer, contractsapi.Rootchain, checkpointManagerAddress, "currentEpoch")
 		require.NoError(t, err)
-		t.Log(blockNumber)
-
-		getLatestCheckpointBlockInput, err := artifacts.Rootchain.Abi.GetMethod("currentCheckpointBlockNumber").Encode([]interface{}{})
+		currentEpoch, err := types.ParseUint64orHex(&currentEpochString)
 		require.NoError(t, err)
-		v, err := txRelayer.Call(ethgo.Address(helper.GetRootchainAdminAddr()), ethgo.Address(helper.CheckpointManagerAddress), getLatestCheckpointBlockInput)
-		t.Log("getLatestCheckpoint", v, err)
-
-		getCheckpoint := func(i int64) string {
-			getCheckpoint, err := artifacts.Rootchain.Abi.GetMethod("checkpoints").Encode([]interface{}{big.NewInt(i)})
+		if currentEpoch >= extra.Checkpoint.EpochNumber {
+			proof, err := getExitProof(cluster.Servers[0].JSONRPCAddr(), 1, extra.Checkpoint.EpochNumber, extra.Checkpoint.EpochNumber*10)
 			require.NoError(t, err)
-			v, err := txRelayer.Call(ethgo.Address(helper.GetRootchainAdminAddr()), ethgo.Address(helper.CheckpointManagerAddress), getCheckpoint)
-			require.NoError(t, err)
-			/*        uint256 epoch;
-			uint256 blockNumber;
-			bytes32 eventRoot;
-			*/
-			checkpointABIType := abi.MustNewType("tuple(uint256 epoch, uint256 blockNumber, bytes32 eventRoot)")
-			dc, err := checkpointABIType.Decode([]byte(v))
-			require.NoError(t, err)
-			t.Log(dc)
-			return v
-		}
-
-		t.Log("blockNumber", blockNumber)
-		t.Log("getLatestCheckpoint 1", getCheckpoint(1))
-		t.Log("getLatestCheckpoint 2", getCheckpoint(2))
-		t.Log("getLatestCheckpoint 3", getCheckpoint(3))
-
-		if blockNumber > 25 {
-			/*
-				curl -X POST --data '{"jsonrpc":"2.0","method":"bridge_generateExitProof",
-				"params":["0x001", "0x001", "0x0010"],"id":1}'
-				// Result
-				{
-					"id":1,
-					"jsonrpc": "2.0",
-					"result":"[\"0x000000000000000000000000000000000000000000000102030405060708090a\"]"
-				}
-			*/
-			//query := struct {
-			//	Jsonrpc string   `json:"jsonrpc"`
-			//	Method  string   `json:"method"`
-			//	Params  []string `json:"params"`
-			//	Id      int      `json:"id"`
-			//}{
-			//	"2.0",
-			//	"bridge_generateExitProof",
-			//	[]string{"0x001", fmt.Sprintf("0x%x", 2), fmt.Sprintf("0x%x", l2SenderBlock)},
-			//	1,
-			//}
-			//_ = l2SenderBlock
-			//d, err := json.Marshal(query)
-			//require.NoError(t, err)
-			//resp, err := http.Post(cluster.Servers[0].JSONRPCAddr(), "application/json", bytes.NewReader(d))
-			//require.NoError(t, err)
-			//s, err := io.ReadAll(resp.Body)
-			//require.NoError(t, err)
-			//t.Log("resp:", string(s))
-			//
-			//rspProof := struct {
-			//	Result []string `json:"result"`
-			//}{
-			//	Result: nil,
-			//}
-			//json.Unmarshal(s, &rspProof)
-			//
-			//proof := make([]types.Hash, len(rspProof.Result))
-			//for i, v := range rspProof.Result {
-			//	proof[i] = types.StringToHash(v)
-			//}
-			proof, err := getExitProof(cluster.Servers[0].JSONRPCAddr(), 1, 2, l2SenderBlock)
-			require.NoError(t, err)
-			/*
-				blockNumber,
-				leafIndex,
-				proofExitEvent,
-				proof,
-
-			*/
 
 			proofExitEventEncoded, err := polybft.ExitEventABIType.Encode(&polybft.ExitEvent{
 				ID:       1,
 				Sender:   key.Address(),
 				Receiver: l1ContractAddress,
 				Data:     stateSenderData,
-				//fixme shouldnt be there
-				EpochNumber: 2,
-				BlockNumber: l2SenderBlock,
 			})
 			require.NoError(t, err)
-			fmt.Println(proofExitEventEncoded)
-			exitInput, err := artifacts.ExitHelper.Abi.GetMethod("exit").Encode([]interface{}{
-				big.NewInt(20),
+
+			_, err = ABITransaction(txRelayer, helper.GetRootchainAdminKey(), contractsapi.ExitHelper, exitHelperContractAddress,
+				"exit",
+				big.NewInt(int64(extra.Checkpoint.EpochNumber*10)),
 				//fixme not obvious how to get it
 				big.NewInt(0),
 				proofExitEventEncoded,
 				proof,
-			})
+			)
 			require.NoError(t, err)
-			exitResp, err := txRelayer.SendTransaction(&ethgo.Transaction{
-				To:    &exitHelperContractAddress,
-				Input: exitInput,
-			}, helper.GetRootchainAdminKey())
-			require.NoError(t, err)
-			t.Log("exitResp", exitResp)
 
-			getProcessed, err := artifacts.ExitHelper.Abi.GetMethod("processedExits").Encode([]interface{}{big.NewInt(1)})
+			res, err := ABICall(txRelayer, contractsapi.ExitHelper, exitHelperContractAddress, "processedExits", big.NewInt(1))
 			require.NoError(t, err)
-			res, err := txRelayer.Call(ethgo.Address(helper.GetRootchainAdminAddr()), exitHelperContractAddress, getProcessed)
-			require.NoError(t, err)
-			respBytes, err := types.ParseBytes(&res)
-			require.Equal(t, respBytes[len(respBytes)-1], uint8(1))
+			parserRes, err := types.ParseBytes(&res)
+			require.Equal(t, parserRes, uint64(1))
 			return
 		}
 
 		time.Sleep(time.Second)
 	}
-
 }
 
 /*
@@ -484,10 +329,41 @@ func getExitProof(rpcAddress string, exitID, epoch, checkpointBlock uint64) ([]t
 	return proof, nil
 }
 
-func ABICall(relayer txrelayer.TxRelayer, artifact *polybft.Artifact, address ethgo.Address, method string, params ...interface{}) (string, error) {
-	getProcessed, err := artifact.Abi.GetMethod(method).Encode(params)
+func ABICall(relayer txrelayer.TxRelayer, artifact *polybft.Artifact, contractAddress ethgo.Address, method string, params ...interface{}) (string, error) {
+	input, err := artifact.Abi.GetMethod(method).Encode(params)
 	if err != nil {
 		return "", err
 	}
-	return relayer.Call(ethgo.Address(helper.GetRootchainAdminAddr()), address, getProcessed)
+	return relayer.Call(ethgo.Address(helper.GetRootchainAdminAddr()), contractAddress, input)
+}
+func ABITransaction(relayer txrelayer.TxRelayer, key ethgo.Key, artifact *polybft.Artifact, contractAddress ethgo.Address, method string, params ...interface{}) (*ethgo.Receipt, error) {
+	input, err := artifact.Abi.GetMethod(method).Encode(params)
+	if err != nil {
+		return nil, err
+	}
+	return relayer.SendTransaction(&ethgo.Transaction{
+		To:    &contractAddress,
+		Input: input,
+	}, key)
+}
+
+func DeployTransaction(relayer txrelayer.TxRelayer, key ethgo.Key, bytecode []byte) (*ethgo.Receipt, error) {
+	return relayer.SendTransaction(&ethgo.Transaction{
+		Input: bytecode,
+	}, key)
+}
+
+func FundValidators(t *testing.T, txRelayer txrelayer.TxRelayer, validators []*polybft.Validator) {
+	for i := range validators {
+		fundAddr := ethgo.Address(validators[i].Address)
+		txn := &ethgo.Transaction{
+			To:    &fundAddr,
+			Value: big.NewInt(1000000000000000000),
+		}
+
+		_, err := txRelayer.SendTransactionLocal(txn)
+		if err != nil {
+			t.Log(validators[i].Address, "error on funding", err)
+		}
+	}
 }

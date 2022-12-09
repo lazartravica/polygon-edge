@@ -14,7 +14,6 @@ var (
 	// StateSenderAddress is an address of StateSender.sol smart contract
 	StateSenderAddress = types.StringToAddress("0x6FE03c2768C9d800AF3Dedf1878b5687FE120a27")
 	// CheckpointManagerAddress is an address of CheckpointManager.sol smart contract
-
 	CheckpointManagerAddress = types.StringToAddress("0x3d46A809D5767B81a8836f0E79145ba615A2Dd61")
 	// BLSAddress is an address of BLS.sol smart contract
 	BLSAddress = types.StringToAddress("0x72E1C51FE6dABF2e3d5701170cf5aD3620E6B8ba")
