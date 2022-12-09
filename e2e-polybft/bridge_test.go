@@ -12,7 +12,6 @@ import (
 	"net/http"
 	"os"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -297,7 +296,6 @@ func TestE2E_Bridge_L2toL1Exit(t *testing.T) {
 	}, helper.GetRootchainAdminKey())
 	require.NoError(t, err)
 
-	sw := sync.Once{}
 	checkpointManagerAddress := ethgo.Address(helper.CheckpointManagerAddress)
 	for {
 		t.Log(rootchainClient.Eth().Call(&ethgo.CallMsg{
@@ -344,90 +342,88 @@ func TestE2E_Bridge_L2toL1Exit(t *testing.T) {
 		t.Log("getLatestCheckpoint 3", getCheckpoint(3))
 
 		if blockNumber > 25 {
-			sw.Do(func() {
-				/*
-					curl -X POST --data '{"jsonrpc":"2.0","method":"bridge_generateExitProof",
-					"params":["0x001", "0x001", "0x0010"],"id":1}'
-					// Result
-					{
-						"id":1,
-						"jsonrpc": "2.0",
-						"result":"[\"0x000000000000000000000000000000000000000000000102030405060708090a\"]"
-					}
-				*/
-				query := struct {
-					Jsonrpc string   `json:"jsonrpc"`
-					Method  string   `json:"method"`
-					Params  []string `json:"params"`
-					Id      int      `json:"id"`
-				}{
-					"2.0",
-					"bridge_generateExitProof",
-					[]string{"0x001", fmt.Sprintf("0x%x", 2), fmt.Sprintf("0x%x", l2SenderBlock)},
-					1,
+			/*
+				curl -X POST --data '{"jsonrpc":"2.0","method":"bridge_generateExitProof",
+				"params":["0x001", "0x001", "0x0010"],"id":1}'
+				// Result
+				{
+					"id":1,
+					"jsonrpc": "2.0",
+					"result":"[\"0x000000000000000000000000000000000000000000000102030405060708090a\"]"
 				}
-				_ = l2SenderBlock
-				d, err := json.Marshal(query)
-				require.NoError(t, err)
-				resp, err := http.Post(cluster.Servers[0].JSONRPCAddr(), "application/json", bytes.NewReader(d))
-				require.NoError(t, err)
-				s, err := io.ReadAll(resp.Body)
-				require.NoError(t, err)
-				t.Log("resp:", string(s))
+			*/
+			query := struct {
+				Jsonrpc string   `json:"jsonrpc"`
+				Method  string   `json:"method"`
+				Params  []string `json:"params"`
+				Id      int      `json:"id"`
+			}{
+				"2.0",
+				"bridge_generateExitProof",
+				[]string{"0x001", fmt.Sprintf("0x%x", 2), fmt.Sprintf("0x%x", l2SenderBlock)},
+				1,
+			}
+			_ = l2SenderBlock
+			d, err := json.Marshal(query)
+			require.NoError(t, err)
+			resp, err := http.Post(cluster.Servers[0].JSONRPCAddr(), "application/json", bytes.NewReader(d))
+			require.NoError(t, err)
+			s, err := io.ReadAll(resp.Body)
+			require.NoError(t, err)
+			t.Log("resp:", string(s))
 
-				rspProof := struct {
-					Result []string `json:"result"`
-				}{
-					Result: nil,
-				}
-				json.Unmarshal(s, &rspProof)
+			rspProof := struct {
+				Result []string `json:"result"`
+			}{
+				Result: nil,
+			}
+			json.Unmarshal(s, &rspProof)
 
-				proof := make([]types.Hash, len(rspProof.Result))
-				for i, v := range rspProof.Result {
-					proof[i] = types.StringToHash(v)
-				}
+			proof := make([]types.Hash, len(rspProof.Result))
+			for i, v := range rspProof.Result {
+				proof[i] = types.StringToHash(v)
+			}
 
-				/*
-					blockNumber,
-					leafIndex,
-					proofExitEvent,
-					proof,
+			/*
+				blockNumber,
+				leafIndex,
+				proofExitEvent,
+				proof,
 
-				*/
+			*/
 
-				proofExitEventEncoded, err := polybft.ExitEventABIType.Encode(&polybft.ExitEvent{
-					ID:       1,
-					Sender:   key.Address(),
-					Receiver: l1ContractAddress,
-					Data:     stateSenderData,
-					//fixme shouldnt be there
-					EpochNumber: 2,
-					BlockNumber: l2SenderBlock,
-				})
-				require.NoError(t, err)
-				fmt.Println(proofExitEventEncoded)
-				exitInput, err := exitHelperArtifact.Abi.GetMethod("exit").Encode([]interface{}{
-					big.NewInt(20),
-					//fixme not obvious how to get it
-					big.NewInt(0),
-					proofExitEventEncoded,
-					proof,
-				})
-				require.NoError(t, err)
-				exitResp, err := txRelayer.SendTransaction(&ethgo.Transaction{
-					To:    &exitHelperContractAddress,
-					Input: exitInput,
-				}, helper.GetRootchainAdminKey())
-				require.NoError(t, err)
-				t.Log("exitResp", exitResp)
-
-				getProcessed, err := exitHelperArtifact.Abi.GetMethod("processedExits").Encode(big.NewInt(1))
-				require.NoError(t, err)
-				res, err := txRelayer.Call(ethgo.Address(helper.GetRootchainAdminAddr()), exitHelperContractAddress, getProcessed)
-				require.NoError(t, err)
-				t.Log(res)
-				return
+			proofExitEventEncoded, err := polybft.ExitEventABIType.Encode(&polybft.ExitEvent{
+				ID:       1,
+				Sender:   key.Address(),
+				Receiver: l1ContractAddress,
+				Data:     stateSenderData,
+				//fixme shouldnt be there
+				EpochNumber: 2,
+				BlockNumber: l2SenderBlock,
 			})
+			require.NoError(t, err)
+			fmt.Println(proofExitEventEncoded)
+			exitInput, err := exitHelperArtifact.Abi.GetMethod("exit").Encode([]interface{}{
+				big.NewInt(20),
+				//fixme not obvious how to get it
+				big.NewInt(0),
+				proofExitEventEncoded,
+				proof,
+			})
+			require.NoError(t, err)
+			exitResp, err := txRelayer.SendTransaction(&ethgo.Transaction{
+				To:    &exitHelperContractAddress,
+				Input: exitInput,
+			}, helper.GetRootchainAdminKey())
+			require.NoError(t, err)
+			t.Log("exitResp", exitResp)
+
+			getProcessed, err := exitHelperArtifact.Abi.GetMethod("processedExits").Encode([]interface{}{big.NewInt(1)})
+			require.NoError(t, err)
+			res, err := txRelayer.Call(ethgo.Address(helper.GetRootchainAdminAddr()), exitHelperContractAddress, getProcessed)
+			require.NoError(t, err)
+			t.Log(res)
+			return
 		}
 
 		time.Sleep(time.Second)
